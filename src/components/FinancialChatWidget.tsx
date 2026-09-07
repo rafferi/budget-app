@@ -77,15 +77,15 @@ export default function FinancialChatWidget() {
         <button
           onClick={() => setOpen(true)}
           title="Финансовый консультант"
-          className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--accent-border)] dark:bg-gradient-to-br dark:from-[#A8CF38] dark:to-[#21A038] shadow-[0_0_32px_-6px_#21A038] transition-all duration-200 ease-in-out hover:brightness-110"
+          className="fixed bottom-5 right-5 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-[var(--shadow-btn)] transition-all duration-200 ease-in-out hover:brightness-110 dark:bg-gradient-to-br dark:from-[#A8CF38] dark:to-[#21A038] dark:text-[#050D0A]"
         >
           <ChatIcon />
         </button>
       )}
 
       {open && (
-        <div className="fixed bottom-5 right-5 z-40 flex h-[500px] max-h-[70vh] w-[370px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl border border-[var(--border-strong)] bg-white dark:bg-[#0D1A14] shadow-[var(--shadow-pop)] [transform:translateZ(0)]">
-          <div className="flex items-center justify-between bg-gradient-to-r from-[#0F3D2E] to-[#12603F] px-5 py-3.5 text-white">
+        <div className="fixed bottom-5 right-5 z-40 flex h-[500px] max-h-[70vh] w-[370px] max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-3xl border border-[var(--border-strong)] bg-[var(--surface)] shadow-[var(--shadow-pop)] [transform:translateZ(0)]">
+          <div className="flex items-center justify-between bg-[var(--surface-2)] px-5 py-3.5 text-[var(--text)] dark:bg-gradient-to-r dark:from-[#0F3D2E] dark:to-[#12603F] dark:text-white">
             <p className="text-sm font-semibold">Финансовый консультант</p>
             <button
               onClick={() => setOpen(false)}
@@ -111,7 +111,7 @@ export default function FinancialChatWidget() {
                 <div
                   className={`min-w-0 max-w-[85%] overflow-hidden rounded-2xl p-3 shadow-sm ${
                     m.role === "user"
-                      ? "rounded-br-md bg-[var(--accent-border)] dark:bg-gradient-to-br dark:from-[#A8CF38] dark:to-[#21A038] text-white font-medium dark:text-[#050D0A]"
+                      ? "rounded-br-md bg-[var(--primary)] text-white font-medium dark:bg-gradient-to-br dark:from-[#A8CF38] dark:to-[#21A038] dark:text-[#050D0A]"
                       : "rounded-tl-md border border-[var(--border)] bg-[var(--field)] text-[var(--text)]"
                   }`}
                 >
@@ -123,9 +123,9 @@ export default function FinancialChatWidget() {
             {busy && (
               <div className="flex justify-start">
                 <div className="flex items-center gap-1.5 rounded-2xl rounded-tl-md border border-[var(--border)] bg-[var(--surface-3)] p-3">
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-[#5C7268]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-[#5C7268] [animation-delay:150ms]" />
-                  <span className="h-2 w-2 animate-bounce rounded-full bg-[#5C7268] [animation-delay:300ms]" />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--text-4)]" />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--text-4)] [animation-delay:150ms]" />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-[var(--text-4)] [animation-delay:300ms]" />
                 </div>
               </div>
             )}
@@ -153,7 +153,7 @@ export default function FinancialChatWidget() {
                 onClick={send}
                 disabled={!canSend}
                 aria-label="Отправить"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--accent-border)] dark:bg-gradient-to-br dark:from-[#A8CF38] dark:to-[#21A038] text-white transition-all duration-200 ease-in-out hover:brightness-110 dark:text-[#050D0A] disabled:cursor-not-allowed disabled:opacity-40"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[var(--primary)] text-white transition-all duration-200 ease-in-out hover:brightness-110 dark:bg-gradient-to-br dark:from-[#A8CF38] dark:to-[#21A038] dark:text-[#050D0A] disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none">
                   <path

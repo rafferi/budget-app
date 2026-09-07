@@ -65,13 +65,17 @@ export function Toaster() {
         <button
           key={t.id}
           onClick={() => dismiss(t.id)}
-          className={`pointer-events-auto flex items-start gap-3 rounded-2xl border bg-white dark:bg-[#0D1A14] p-4 text-left shadow-[var(--shadow-pop)] [transform:translateZ(0)] transition hover:bg-[var(--surface-3)] ${
-            t.kind === "success" ? "border-[var(--accent-border)]/50" : "border-[var(--danger)]/45"
+          className={`pointer-events-auto flex items-start gap-3 rounded-2xl border bg-[var(--surface)] p-4 text-left shadow-[var(--shadow-pop)] [transform:translateZ(0)] transition hover:bg-[var(--surface-3)] ${
+            t.kind === "success"
+              ? "border-[var(--accent-border)]/50 text-[var(--positive-text)]"
+              : "border-[var(--danger)]/45 text-[var(--danger)]"}
           }`}
         >
           <span
             className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${
-              t.kind === "success" ? "bg-[#21A038]" : "bg-[var(--danger)]"
+              t.kind === "success"
+                ? "bg-[var(--positive-bg)] text-[var(--positive-text)]"
+                : "bg-[var(--danger)]"}
             }`}
           />
           <span className="text-sm leading-snug text-[var(--text)]">{t.text}</span>

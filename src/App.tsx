@@ -15,6 +15,7 @@ import {
 import {
   listStatements,
   getAnalytics,
+  getCategories,
   getErrorMessage,
   analyzeStatement,
   getAiInsights,
@@ -39,6 +40,7 @@ import FinancialChatWidget from "./components/FinancialChatWidget";
 import FinancialHistoryChart from "./components/FinancialHistoryChart";
 import MandatoryExpensesBlock from "./components/MandatoryExpensesBlock";
 import { Toaster, toast } from "./components/Toast";
+import sberLogo from "./assets/sber-logo.png";
 
 /* ---------------- МОК-ДАННЫЕ ---------------- */
 
@@ -147,19 +149,16 @@ function ThemeToggle({
 function Logo() {
   return (
     <div className="flex items-center gap-3">
-      <div className="relative flex h-11 w-11 items-center justify-center rounded-2xl bg-[var(--accent-border)] dark:bg-gradient-to-br dark:from-[#A8CF38] dark:via-[#3FC8A0] dark:to-[#21A038]">
-        <div className="absolute inset-0 hidden rounded-2xl bg-[#A8CF38] opacity-60 blur-lg dark:block" />
-        <svg viewBox="0 0 24 24" className="relative h-6 w-6" fill="none">
-          <path d="M4 9h16M4 15h16" stroke="#FFFFFF" strokeWidth="2.5" className="dark:stroke-[#071410]" strokeLinecap="round" />
-          <circle cx="8" cy="9" r="2.5" fill="#FFFFFF" className="dark:fill-[#071410]" />
-          <circle cx="16" cy="15" r="2.5" fill="#FFFFFF" className="dark:fill-[#071410]" />
-        </svg>
-      </div>
+      <img
+        src={sberLogo}
+        alt="Сбер"
+        className="h-11 w-11 shrink-0"
+      />
       <div>
         <p className="text-xl font-bold leading-tight tracking-tight text-[var(--text)]">
           FinBalance
         </p>
-        <p className="text-xs leading-tight text-[var(--text-4)]">Общий бюджет</p>
+        <p className="text-xs leading-tight text-[var(--text-4)]">Анализ банковских выписок · прототип для экосистемы Сбера</p>
       </div>
     </div>
   );
@@ -191,12 +190,18 @@ function Stat({
   value,
   hint,
   dark = false,
+  valueClassName,
 }: {
   label: string;
   value: string;
   hint?: string;
   dark?: boolean;
+  valueClassName?: string;
 }) {
+  // Явный класс цвета числа побеждает дефолт — чтобы два text-* класса
+  // не спорили за color в порядке генерации Tailwind.
+  const valueColor =
+    valueClassName ?? (dark ? "text-[var(--accent)] dark:text-[#050D0A]" : "text-[var(--text)]");
   return (
     <div
       className={`flex items-baseline justify-between gap-3 rounded-[var(--radius-card)] border border-[var(--border)] bg-[var(--surface)] px-6 py-6 shadow-[var(--shadow-card)] transition-all duration-200 ease-in-out hover:-translate-y-0.5 hover:border-[var(--accent-border)]/40 hover:shadow-[var(--shadow-card-hover)] ${
@@ -207,7 +212,7 @@ function Stat({
     >
       <div>
         <p className={`text-sm font-medium text-[var(--text-3)] ${dark ? "dark:text-[#0A1F14]/70" : ""}`}>{label}</p>
-        <p className={`mt-1 text-3xl font-bold tracking-tight ${dark ? "text-[var(--accent)] dark:text-[#050D0A]" : "text-[var(--text)]"}`}>
+        <p className={`mt-1 text-3xl font-bold tracking-tight ${valueColor}`}>
           {value}
         </p>
       </div>
@@ -283,6 +288,12 @@ export default function App() {
   // ("Спланировать свободные деньги" — подставляет сумму и скроллит).
   const [savingsPrefill, setSavingsPrefill] = useState<number | null>(null);
 
+  // Income-категории из справочника backend: блок "Расходы по категориям
+  // строится по by_category (все транзакции), доходные строки отсекаем
+  // в месте рендера, проценты backend не трогаем. Пусто до загрузки —
+  // фильтр просто не применяется (поведение как раньше).
+  const [incomeCategories, setIncomeCategories] = useState<string[]>([]);
+
   useEffect(() => {
     let cancelled = false;
     listStatements()
@@ -298,6 +309,23 @@ export default function App() {
           toast.error(text);
           setLoading(false);
         }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // Справочник категорий грузим один раз: нужен только income-список
+  // для фильтра блока "Расходы по категориям". Ошибка тихая —
+  // график покажется без фильтра, как раньше.
+  useEffect(() => {
+    let cancelled = false;
+    getCategories()
+      .then((res) => {
+        if (!cancelled) setIncomeCategories(res.income);
+      })
+      .catch(() => {
+        /* ignore: фильтр просто не применится */
       });
     return () => {
       cancelled = true;
@@ -393,6 +421,14 @@ export default function App() {
 
   const stats = analytics ? mapTotals(analytics.totals) : null;
   const chartCategories = analytics ? mapCategories(analytics.by_category) : [];
+  // Только расходные строки для блока "Расходы по категориям":
+  // сравнение по нижнему регистру с тримом, проценты — как с backend.
+  const incomeCategorySet = new Set(
+    incomeCategories.map((c) => c.toLowerCase().trim()),
+  );
+  const expenseCategories = chartCategories.filter(
+    (c) => !incomeCategorySet.has(c.name.toLowerCase().trim()),
+  );
   const chartWeekly = analytics ? mapTimeline(analytics.timeline) : [];
   const recipientSlices = analytics ? mapRecipients(analytics.top_recipients) : [];
   const currentStatement = statements.find((s) => s.id === currentId) ?? null;
@@ -466,17 +502,20 @@ export default function App() {
       <header className="mb-14 flex flex-col gap-5 md:mb-16 md:flex-row md:items-start md:justify-between">
         <div className="flex flex-col gap-3">
           <Logo />
+          {SHOW_LEGACY_WIDGETS && (
           <div>
             <h1 className="text-lg font-medium tracking-tight text-[var(--text-2)]">
               Квартира на Мира, 19
             </h1>
             <p className="mt-0.5 text-sm text-[var(--text-3)]">Сентябрь · 4 участника</p>
           </div>
+          )}
         </div>
 
         <div className="flex flex-col items-start gap-3 md:items-end">
           <div className="flex items-center gap-4">
             <ThemeToggle theme={theme} onToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} />
+            {SHOW_LEGACY_WIDGETS && (
             <div className="text-right">
               <p className="text-xs text-[var(--text-3)]">
                 {myBalance < 0 ? "Ты должен" : "Тебе должны"}
@@ -489,6 +528,7 @@ export default function App() {
                 {money(Math.abs(myBalance))}
               </p>
             </div>
+            )}
             {SHOW_LEGACY_WIDGETS && (
               <div className="flex -space-x-2">
                 {members.map((m) => (
@@ -534,12 +574,14 @@ export default function App() {
                   Привязать карту
                 </button>
               ))}
+            {SHOW_LEGACY_WIDGETS && (
             <button
               disabled
               className="cursor-not-allowed rounded-full bg-[var(--accent-border)] dark:bg-gradient-to-r dark:from-[#A8CF38] dark:to-[#21A038] px-5 py-2.5 text-sm font-semibold text-white dark:text-[#050D0A] opacity-50"
             >
               Добавить трату
             </button>
+            )}
           </div>
         </div>
       </header>
@@ -593,13 +635,19 @@ export default function App() {
           label="Баланс выписки"
           value={stats ? money(stats.balance) : "—"}
           hint={currentStatement ? currentStatement.file_name : "нет данных"}
+          dark
         />
-        <Stat label="Доходы" value={stats ? money(stats.income) : "—"} hint="за период" />
+        <Stat
+          label="Доходы"
+          value={stats ? money(stats.income) : "—"}
+          hint="за период"
+          valueClassName="text-[#A0E720]"
+        />
         <Stat
           label="Расходы"
           value={stats ? money(stats.expenses) : "—"}
           hint={stats ? `${stats.transactionsCount} операций` : "нет данных"}
-          dark
+          valueClassName="text-[var(--danger)]"
         />
       </div>
 
@@ -710,7 +758,7 @@ export default function App() {
           >
             <div className="h-52">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartCategories} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
+                <BarChart data={expenseCategories} layout="vertical" margin={{ top: 0, right: 0, left: 0, bottom: 0 }}>
                   <XAxis type="number" hide />
                   <YAxis
                     type="category"
@@ -730,7 +778,7 @@ export default function App() {
                     animationDuration={200}
                   />
                   <Bar dataKey="sum" radius={[0, 6, 6, 0]} barSize={14}>
-                    {chartCategories.map((c, i) => (
+                    {expenseCategories.map((c, i) => (
                       <Cell key={i} fill={c.trend > 50 ? chartColors.line : (isDark ? "rgba(168,207,56,0.35)" : "#CBE7D3")} />
                     ))}
                   </Bar>
@@ -738,7 +786,7 @@ export default function App() {
               </ResponsiveContainer>
             </div>
             <div className="mt-4 divide-y divide-[var(--border-soft)] border-t border-[var(--border-strong)]">
-              {chartCategories.map((c) => (
+              {expenseCategories.map((c) => (
                 <div key={c.name} className="flex items-center justify-between py-2.5 text-sm">
                   <span className="text-[var(--text-3)]">{c.name}</span>
                   <div className="flex items-center gap-3">
