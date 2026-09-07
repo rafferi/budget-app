@@ -369,6 +369,63 @@ export function getCategories(): Promise<CategoriesResponse> {
   return request<CategoriesResponse>("/categories");
 }
 
+/* Глобальный тренд по всем выпискам скоупа (не привязан к одной выписке).
+ * month — календарный месяц "YYYY-MM", сортировка по возрастанию — с backend. */
+export interface MonthlyTrend {
+  month: string;
+  income: number;
+  expenses: number;
+  balance: number;
+  transactions_count: number;
+}
+
+export interface ProfileTrendResponse {
+  months: MonthlyTrend[];
+}
+
+export function getProfileTrend(): Promise<ProfileTrendResponse> {
+  return request<ProfileTrendResponse>("/profile/trend");
+}
+
+/* Обязательные ежемесячные платежи по всем выпискам скоупа.
+ * Детектор — эвристический (backend), типы повторяют ответ 1-в-1. */
+export type MandatoryExpenseType =
+  | "subscription"
+  | "utilities"
+  | "rent"
+  | "loan"
+  | "communication";
+
+export interface MandatoryExpense {
+  type: MandatoryExpenseType | string;
+  category: string;
+  merchant: string;
+  average_amount: number;
+  frequency: string;
+  occurrences: number;
+  last_date: string;
+  monthly_total: number;
+}
+
+export interface MandatoryExpensesSummary {
+  subscriptions_count: number;
+  subscriptions_total: number;
+  utilities_total: number;
+  rent_total: number;
+  loans_total: number;
+  communication_total: number;
+}
+
+export interface MandatoryExpensesResponse {
+  mandatory_expenses: MandatoryExpense[];
+  total_monthly_mandatory: number;
+  summary: MandatoryExpensesSummary;
+}
+
+export function getMandatoryExpenses(): Promise<MandatoryExpensesResponse> {
+  return request<MandatoryExpensesResponse>("/profile/mandatory-expenses");
+}
+
 export interface ManualTransactionData {
   date: string;
   description: string;

@@ -18,8 +18,10 @@ function parseTarget(raw: string): number | null {
 
 export default function SavingsPlanner({
   statementId,
+  prefillTarget = null,
 }: {
   statementId: number | null;
+  prefillTarget?: number | null;
 }) {
   const [input, setInput] = useState("");
   const [plan, setPlan] = useState<SavingsPlanResponse | null>(null);
@@ -30,6 +32,14 @@ export default function SavingsPlanner({
     setPlan(null);
     setInput("");
   }, [statementId]);
+
+  // Внешний prefill (кнопка "Спланировать свободные деньги" из блока
+  // обязательных расходов): подставляет сумму цели, расчёт — по клику.
+  useEffect(() => {
+    if (prefillTarget != null && Number.isFinite(prefillTarget)) {
+      setInput(String(Math.round(prefillTarget)));
+    }
+  }, [prefillTarget]);
 
   const target = parseTarget(input);
   const canSubmit = statementId != null && target != null && !busy;

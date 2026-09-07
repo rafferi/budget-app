@@ -36,6 +36,8 @@ import SavingsPlanner from "./components/SavingsPlanner";
 import ReceiptUploader from "./components/ReceiptUploader";
 import ManualTransactionForm from "./components/ManualTransactionForm";
 import FinancialChatWidget from "./components/FinancialChatWidget";
+import FinancialHistoryChart from "./components/FinancialHistoryChart";
+import MandatoryExpensesBlock from "./components/MandatoryExpensesBlock";
 import { Toaster, toast } from "./components/Toast";
 
 /* ---------------- МОК-ДАННЫЕ ---------------- */
@@ -277,6 +279,9 @@ export default function App() {
   // Счётчик инвалидации после confirm чека: аналитика и таблица
   // перезапрашиваются, т.к. состав транзакций выписки изменился.
   const [refreshKey, setRefreshKey] = useState(0);
+  // Prefill цели для SavingsPlanner из блока обязательных расходов
+  // ("Спланировать свободные деньги" — подставляет сумму и скроллит).
+  const [savingsPrefill, setSavingsPrefill] = useState<number | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -368,10 +373,22 @@ export default function App() {
       prev.some((s) => s.id === statement.id) ? prev : [statement, ...prev],
     );
     setCurrentId(statement.id);
+    // Новая выписка меняет и глобальный тренд: инвалидируем историю
+    // тем же ключом (батчится с setCurrentId — лишнего refetch аналитики нет).
+    setRefreshKey((k) => k + 1);
   }
 
   function handleConfirmed() {
     setRefreshKey((k) => k + 1);
+  }
+
+  function handlePlanFreeMoney(amount: number) {
+    setSavingsPrefill(amount);
+    requestAnimationFrame(() => {
+      document
+        .getElementById("savings-planner")
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
   }
 
   const stats = analytics ? mapTotals(analytics.totals) : null;
@@ -506,6 +523,21 @@ export default function App() {
           </div>
         </div>
       </header>
+
+      {/* Глобальная картина по всем выпискам — перед деталями по текущей:
+          от currentId не зависит, задаёт контекст для цифр ниже. */}
+      <div className="mb-8 lg:mb-10">
+        <FinancialHistoryChart refreshKey={refreshKey} />
+      </div>
+
+      {/* Обязательные расходы — тоже глобальные: фиксированные платежи
+          логично показать рядом с историей, до деталей по выписке. */}
+      <div className="mb-8 lg:mb-10">
+        <MandatoryExpensesBlock
+          refreshKey={refreshKey}
+          onPlanFreeMoney={handlePlanFreeMoney}
+        />
+      </div>
 
       <div className="mb-8 grid grid-cols-1 gap-6 lg:mb-10 lg:grid-cols-2">
         <div className="rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-7 shadow-[var(--shadow-card)] md:p-8 backdrop-blur-2xl">
@@ -899,7 +931,12 @@ export default function App() {
     )}
   </div>
 </Card>
-          <SavingsPlanner statementId={currentId} />
+          <div id="savings-planner" className="scroll-mt-6">
+            <SavingsPlanner
+              statementId={currentId}
+              prefillTarget={savingsPrefill}
+            />
+          </div>
         </div>
       </div>
       </div>
