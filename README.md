@@ -1,32 +1,104 @@
-# React + TypeScript + Vite
+# FinBalance — frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Клиентская часть анализатора банковских выписок FinBalance
+(хакатон-кейс для экосистемы Сбера): одностраничный дашборд на
+React, подключённый к Laravel API.
 
-Currently, two official plugins are available:
+## Стек
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- React 19 + TypeScript
+- Vite
+- Tailwind CSS v4 (дизайн-токены на CSS-переменных, светлая и тёмная темы)
+- Recharts (графики)
+- Без UI-китов и роутера: одна страница, собственные компоненты
 
-## React Compiler
+## Возможности
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- Авторизация: экран входа/регистрации, Bearer-токен, корректная
+  обработка 401 посреди сессии
+- Дашборд по выписке: доходы/расходы/баланс, расходы по категориям,
+  динамика по дням, топ получателей
+- «История»: доходы и расходы по месяцам across все загруженные выписки
+- «Обязательные расходы»: автоматически найденные регулярные платежи
+  с иконками по типам и итогом за месяц; кнопка «Спланировать
+  свободные деньги» передаёт цель в планировщик
+- Три способа добавить данные: загрузка CSV, фото чека (AI-распознавание
+  с формой подтверждения и правки), ручная операция (расход/доход
+  со справочником категорий)
+- Таблица транзакций: фильтры по категории, типу, датам, сумме,
+  поиск, пагинация
+- AI-блоки: «Что заметил ассистент» (инсайты) и «Как сэкономить»
+  (рекомендации с суммами экономии), кнопки анализа и обновления
+- «Хочу экономить X»: интерактивное распределение цели по категориям
+  с предупреждением о недостижимости точной цели
+- Чат с финансовым консультантом: плавающий виджет, знает
+  агрегированный профиль по всем выпискам
+- Понятные ошибки во всех точках: тосты и инлайн-подсказки с текстом
+  backend, включая сценарий недоступного сервера
+- Интерфейс полностью на русском; даты и суммы в локальных форматах,
+  табличные цифры (tabular-nums)
+- Дизайн на фирменной палитре Сбера: #15B648 (основной зелёный),
+  #42E3B4 (мятный акцент AI-блоков), #A0E720 (положительные значения),
+  #EEF3FF (текст на тёмном), графитовые поверхности; логотип —
+  градиентная галочка
 
-## Expanding the Oxlint configuration
+## Быстрый старт
 
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
+    npm install
+    npm run dev
 
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
-```
+Приложение доступно на http://localhost:5173.
+Backend должен быть запущен на http://127.0.0.1:8000 (см. README
+бэкенда). Адрес API задаётся в src/services/api.ts (API_BASE).
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Вход под демо-доступом: demo@finbalance.ru / demo12345
+
+## Демо-сценарий
+
+1. Войти под демо-доступом
+2. Блок «История» — динамика доходов/расходов по всем месяцам
+3. Блок «Обязательные расходы» — аренда, ЖКХ, подписки, итог за месяц
+4. Загрузить новую CSV-выписку / фото чека / добавить операцию вручную
+5. Выбрать выписку — дашборд и таблица транзакций с фильтрами
+6. «Провести финансовый анализ» — инсайты и рекомендации с суммами
+7. «Хочу экономить X» — распределение цели по категориям
+8. Чат в правом нижнем углу — вопросы о собственных финансах
+
+## Структура проекта
+
+    src/
+      App.tsx                  сборка страницы, загрузка данных,
+                               auth-bootstrap
+      components/
+        AuthScreen             вход и регистрация
+        UploadForm             загрузка CSV
+        ReceiptUploader        фото чека: распознавание + подтверждение
+        ManualTransactionForm  ручная операция
+        StatementSelector      выбор выписки
+        TransactionsTable      таблица с фильтрами и пагинацией
+        FinancialHistoryChart  тренд по всем выпискам
+        MandatoryExpensesBlock обязательные расходы
+        SavingsPlanner         «Хочу экономить X»
+        FinancialChatWidget    чат-консультант
+        Toast                  уведомления об ошибках и успехе
+        Icons                  набор SVG-иконок
+      services/
+        api.ts                 API-клиент (fetch + Bearer-токен),
+                               типы ответов
+        mappers.ts             адаптер: ответы backend → формат компонентов
+      index.css                токены тем (светлая/тёмная), базовые стили
+
+## Сборка и проверки
+
+    npm run build     tsc + vite build, прод-бандл
+    npm run dev       dev-сервер
+
+## Соглашения по интеграции с backend
+
+- Все запросы идут через src/services/api.ts; ошибки поднимаются как
+  ApiError с осмысленным текстом backend, а не техническим статусом
+- mappers.ts изолирует компоненты от формата ответов backend
+- Обновление данных после мутаций (CSV / чек / ручная операция) —
+  через refreshKey: аналитика и таблица перезапрашиваются автоматически
+- История чата и состояние виджетов не персистятся: backend stateless
+  для диалога, профиль собирается на каждый запрос
