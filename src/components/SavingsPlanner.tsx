@@ -8,6 +8,10 @@ import { toast } from "./Toast";
 
 const fmtMoney = (n: number) => n.toLocaleString("ru-RU") + " ₽";
 
+// Проценты через запятую ("2,07%", а не "2.07%").
+const fmtPct = (n: number) =>
+  new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(n);
+
 function parseTarget(raw: string): number | null {
   const normalized = raw.replace(/\s/g, "").replace(",", ".");
   if (normalized === "") return null;
@@ -117,7 +121,7 @@ export default function SavingsPlanner({
                 <div className="min-w-0">
                   <p className="truncate font-medium text-[var(--text)]">{d.category}</p>
                   <p className="mt-0.5 text-xs text-[var(--text-4)]">
-                    сейчас {fmtMoney(d.current_amount)} · −{d.reduction_percentage}%
+                    сейчас {fmtMoney(d.current_amount)} · −{fmtPct(d.reduction_percentage)}%
                   </p>
                 </div>
                 <span className="shrink-0 font-semibold text-[var(--accent)]">

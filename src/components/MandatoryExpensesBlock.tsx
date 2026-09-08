@@ -6,17 +6,43 @@ import {
   type MandatoryExpensesResponse,
 } from "../services/api";
 import { toast } from "./Toast";
+import {
+  IconCard,
+  IconHome,
+  IconPhone,
+  IconSubscription,
+  IconUtilities,
+} from "./Icons";
 
 const fmtMoney = (n: number) => n.toLocaleString("ru-RU") + " ₽";
 
-/* Иконки типов обязательных платежей. */
-const TYPE_ICON: Record<string, string> = {
-  rent: "🏠",
-  utilities: "💡",
-  subscription: "🔄",
-  loan: "💳",
-  communication: "📱",
+/* Иконка + плитка типа обязательного платежа: мягкий tint-фон
+ * (8-12%) и насыщенная иконка того же hue — через CSS-переменные,
+ * поэтому корректно в обеих темах. */
+const TYPE_TILE: Record<string, { Icon: typeof IconHome; tile: string }> = {
+  rent: {
+    Icon: IconHome,
+    tile: "bg-[var(--tile-rent-bg)] text-[var(--tile-rent-fg)]",
+  },
+  utilities: {
+    Icon: IconUtilities,
+    tile: "bg-[var(--tile-utilities-bg)] text-[var(--tile-utilities-fg)]",
+  },
+  subscription: {
+    Icon: IconSubscription,
+    tile: "bg-[var(--tile-subscription-bg)] text-[var(--tile-subscription-fg)]",
+  },
+  loan: {
+    Icon: IconCard,
+    tile: "bg-[var(--tile-loan-bg)] text-[var(--tile-loan-fg)]",
+  },
+  communication: {
+    Icon: IconPhone,
+    tile: "bg-[var(--tile-communication-bg)] text-[var(--tile-communication-fg)]",
+  },
 };
+
+const FALLBACK_TILE = "bg-[var(--surface-3)] text-[var(--text-3)]";
 
 function pluralPayments(n: number): string {
   const mod10 = n % 10;
@@ -134,17 +160,23 @@ export default function MandatoryExpensesBlock({
       {!failed && data !== null && expenses.length > 0 && (
         <>
           <div className="divide-y divide-[var(--border-soft)]">
-            {expenses.map((e, i) => (
-              <div
-                key={`${e.type}-${e.merchant}-${i}`}
-                className="flex items-center gap-3 py-3"
-              >
-                <span
-                  aria-hidden
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-[var(--surface-3)] text-lg"
+            {expenses.map((e, i) => {
+              const tile = TYPE_TILE[e.type];
+              const Icon = tile?.Icon ?? IconCard;
+
+              return (
+                <div
+                  key={`${e.type}-${e.merchant}-${i}`}
+                  className="flex items-center gap-3 py-3"
                 >
-                  {TYPE_ICON[e.type] ?? "📌"}
-                </span>
+                  <span
+                    aria-hidden
+                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
+                      tile?.tile ?? FALLBACK_TILE
+                    }`}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-[var(--text)]">
                     {e.category}
@@ -160,18 +192,19 @@ export default function MandatoryExpensesBlock({
                     последний {fullDate(e.last_date)}
                   </p>
                 </div>
-                <span className="shrink-0 text-sm font-semibold text-[var(--text)]">
+                <span className="shrink-0 text-sm font-semibold tabular-nums text-[var(--text)]">
                   {fmtMoney(e.average_amount)}
                 </span>
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
 
           <div className="mt-2 flex items-baseline justify-between gap-3 border-t border-[var(--border-strong)] pt-4">
             <p className="text-sm font-medium text-[var(--text-3)]">
               Итого в месяц
             </p>
-            <p className="text-2xl font-bold tracking-tight text-[var(--text)]">
+            <p className="text-2xl font-bold tabular-nums tracking-tight text-[var(--text)]">
               {fmtMoney(total)}
             </p>
           </div>

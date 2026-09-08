@@ -5,6 +5,7 @@ import {
   getErrorMessage,
 } from "../services/api";
 import { toast } from "./Toast";
+import { IconTrendDown, IconTrendUp } from "./Icons";
 
 type EntryType = "debit" | "credit";
 
@@ -102,7 +103,10 @@ export default function ManualTransactionForm({
               : "text-[var(--text-4)] hover:text-[var(--text-2)]"
           }`}
         >
-          Расход
+          <span className="inline-flex items-center justify-center gap-1.5">
+            <IconTrendDown className="h-4 w-4" />
+            Расход
+          </span>
         </button>
         <button
           onClick={() => switchType("credit")}
@@ -112,7 +116,10 @@ export default function ManualTransactionForm({
               : "text-[var(--text-4)] hover:text-[var(--text-2)]"
           }`}
         >
-          Доход
+          <span className="inline-flex items-center justify-center gap-1.5">
+            <IconTrendUp className="h-4 w-4" />
+            Доход
+          </span>
         </button>
       </div>
 

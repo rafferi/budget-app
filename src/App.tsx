@@ -13,6 +13,9 @@ import {
   Cell,
 } from "recharts";
 import {
+  clearToken,
+  getMe,
+  getToken,
   listStatements,
   getAnalytics,
   getCategories,
@@ -20,6 +23,10 @@ import {
   analyzeStatement,
   getAiInsights,
   isRecommendation,
+  logout,
+  downloadReport,
+  setUnauthorizedHandler,
+  type AuthUser,
   type Statement,
   type AnalyticsResponse,
   type AiInsight,
@@ -37,6 +44,7 @@ import SavingsPlanner from "./components/SavingsPlanner";
 import ReceiptUploader from "./components/ReceiptUploader";
 import ManualTransactionForm from "./components/ManualTransactionForm";
 import FinancialChatWidget from "./components/FinancialChatWidget";
+import AuthScreen from "./components/AuthScreen";
 import FinancialHistoryChart from "./components/FinancialHistoryChart";
 import MandatoryExpensesBlock from "./components/MandatoryExpensesBlock";
 import { Toaster, toast } from "./components/Toast";
@@ -78,6 +86,47 @@ const goal = {
 
 const money = (n: number) => n.toLocaleString("ru-RU") + " ₽";
 
+// Проценты через запятую ("71,77%", а не "71.77%").
+const fmtPct = (n: number) =>
+  new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(n);
+
+// ISO "2026-07-25" → банковский "25.07.2026" для таблиц и подписей.
+// Не-ISO значения отдаём как есть, пусто — прочерк.
+function fullDate(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const dt = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(dt.getTime())) return value;
+  return new Intl.DateTimeFormat("ru", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(dt);
+}
+
+// Backend иногда кладёт в description сырые суммы вида "2994.00 руб.",
+// проценты с точкой ("вырос на 71.77%") и крупные числа без разделителей.
+// Приводим всё к русскому виду ТОЛЬКО на этапе рендера, данные не мутируем:
+// 1) "N.NN руб." → money(); 2) десятичная точка → запятая (кроме дат
+// вида 25.07.2026 и версий/IP); 3) разделитель тысяч у целых ≥ 1000,
+// кроме годов 1900–2199.
+function prettifyBackendAmounts(text: string): string {
+  const withMoney = text.replace(
+    /(\d[\d\s]*)(?:[.,](\d{1,2}))?\s*руб\./g,
+    (match: string, intPart: string, fracPart: string | undefined) => {
+      const value = Number(`${intPart.replace(/\s/g, "")}.${fracPart ?? "0"}`);
+      return Number.isFinite(value) ? money(value) : match;
+    },
+  );
+  const withComma = withMoney.replace(
+    /(?<!\d[.,])(\d+)\.(\d{1,2})(?!\d)(?!\.\d)/g,
+    "$1,$2",
+  );
+  return withComma.replace(
+    /(?<![\d.])(?!(?:19|20|21)\d{2}(?!\d))(\d{4,})(?!\d)/g,
+    (m: string) => m.replace(/\B(?=(\d{3})+(?!\d))/g, " "),
+  );
+}
+
 // Короткая подпись даты для оси X ("1 сен" вместо "2026-09-01").
 // Не-ISO значения (на всякий случай) отдаём как есть.
 const shortDate = (value: string | number) => {
@@ -105,6 +154,13 @@ const PRIORITY_STYLE: Record<string, { badge: string; amount: string }> = {
   high: { badge: "bg-[var(--danger-soft)] text-[var(--danger)]", amount: "text-[var(--danger)]" },
   medium: { badge: "bg-[var(--warn-soft)] text-[var(--warn-text)]", amount: "text-[var(--text)]" },
   low: { badge: "bg-[var(--surface-3)] text-[var(--text-3)]", amount: "text-[var(--text-3)]" },
+};
+
+/* Русские подписи приоритетов (backend шлёт high/medium/low). */
+const PRIORITY_LABELS: Record<string, string> = {
+  high: "высокий",
+  medium: "средний",
+  low: "низкий",
 };
 /* ---------------- ЛОГОТИПЫ ---------------- */
 
@@ -180,7 +236,7 @@ function Badge({ value }: { value: number }) {
       }`}
     >
       {up ? "+" : ""}
-      {value}%
+      {fmtPct(value)}%
     </span>
   );
 }
@@ -212,7 +268,7 @@ function Stat({
     >
       <div>
         <p className={`text-sm font-medium text-[var(--text-3)] ${dark ? "dark:text-[#0A1F14]/70" : ""}`}>{label}</p>
-        <p className={`mt-1 text-3xl font-bold tracking-tight ${valueColor}`}>
+        <p className={`mt-1 text-3xl font-bold tabular-nums tracking-tight ${valueColor}`}>
           {value}
         </p>
       </div>
@@ -287,6 +343,7 @@ export default function App() {
   // Prefill цели для SavingsPlanner из блока обязательных расходов
   // ("Спланировать свободные деньги" — подставляет сумму и скроллит).
   const [savingsPrefill, setSavingsPrefill] = useState<number | null>(null);
+  const [reportBusy, setReportBusy] = useState(false);
 
   // Income-категории из справочника backend: блок "Расходы по категориям
   // строится по by_category (все транзакции), доходные строки отсекаем
@@ -294,7 +351,50 @@ export default function App() {
   // фильтр просто не применяется (поведение как раньше).
   const [incomeCategories, setIncomeCategories] = useState<string[]>([]);
 
+  // Auth-bootstrap: checking (splash) → anonymous (AuthScreen) →
+  // authenticated (дашборд). Дашборд монтируется только в authenticated.
+  const [authState, setAuthState] = useState<
+    "checking" | "anonymous" | "authenticated"
+  >("checking");
+  const [authUser, setAuthUser] = useState<AuthUser | null>(null);
+
+  // Регистрируем глобальный разлогин при 401 посреди сессии
+  // и проверяем сохранённый токен. Загрузки данных стартуют
+  // только в authenticated (гарды в эффектах ниже).
   useEffect(() => {
+    setUnauthorizedHandler(() => {
+      setAuthUser(null);
+      setAuthState("anonymous");
+    });
+    if (getToken() === null) {
+      setAuthState("anonymous");
+      return;
+    }
+    let cancelled = false;
+    getMe()
+      .then((res) => {
+        if (!cancelled) {
+          setAuthUser(res.user);
+          setAuthState("authenticated");
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          // 401 уже сбросил токен через обработчик выше; дублируем
+          // локально для прочих ошибок (сеть и т.п.).
+          clearToken();
+          setAuthUser(null);
+          setAuthState("anonymous");
+        }
+      });
+    return () => {
+      cancelled = true;
+      setUnauthorizedHandler(null);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (authState !== "authenticated") return;
     let cancelled = false;
     listStatements()
       .then((res) => {
@@ -313,12 +413,13 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authState]);
 
   // Справочник категорий грузим один раз: нужен только income-список
   // для фильтра блока "Расходы по категориям". Ошибка тихая —
   // график покажется без фильтра, как раньше.
   useEffect(() => {
+    if (authState !== "authenticated") return;
     let cancelled = false;
     getCategories()
       .then((res) => {
@@ -330,7 +431,7 @@ export default function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [authState]);
 
   useEffect(() => {
     if (currentId == null) return;
@@ -408,6 +509,20 @@ export default function App() {
 
   function handleConfirmed() {
     setRefreshKey((k) => k + 1);
+  }
+
+  // Явный выход: серверный logout при возможности, локально —
+  // всегда (токен, пользователь, экран входа).
+  async function handleLogout() {
+    try {
+      await logout();
+    } catch {
+      /* сеть недоступна — локальный выход всё равно выполняем */
+    } finally {
+      clearToken();
+      setAuthUser(null);
+      setAuthState("anonymous");
+    }
   }
 
   function handlePlanFreeMoney(amount: number) {
@@ -490,8 +605,8 @@ export default function App() {
       </div>
       <div className="relative z-10 mx-auto w-full max-w-[1180px]">
       <Toaster />
-      <FinancialChatWidget />
-            <input
+      {authState === "authenticated" && <FinancialChatWidget />}
+      <input
         ref={fileRef}
         type="file"
         accept="image/*"
@@ -499,6 +614,20 @@ export default function App() {
         onChange={onFile}
       />
 
+      {authState === "checking" ? (
+        <div className="flex min-h-[70vh] flex-col items-center justify-center gap-4">
+          <Logo />
+          <p className="text-sm text-[var(--text-4)]">Загрузка…</p>
+        </div>
+      ) : authState === "anonymous" ? (
+        <AuthScreen
+          onAuthenticated={(user) => {
+            setAuthUser(user);
+            setAuthState("authenticated");
+          }}
+        />
+      ) : (
+      <>
       <header className="mb-14 flex flex-col gap-5 md:mb-16 md:flex-row md:items-start md:justify-between">
         <div className="flex flex-col gap-3">
           <Logo />
@@ -515,6 +644,19 @@ export default function App() {
         <div className="flex flex-col items-start gap-3 md:items-end">
           <div className="flex items-center gap-4">
             <ThemeToggle theme={theme} onToggle={() => setTheme((t) => (t === "dark" ? "light" : "dark"))} />
+            {authUser !== null && (
+              <div className="text-right">
+                <p className="max-w-44 truncate text-xs text-[var(--text-3)]">
+                  {authUser.email}
+                </p>
+                <button
+                  onClick={handleLogout}
+                  className="text-xs font-medium text-[var(--text-3)] transition hover:text-[var(--text)]"
+                >
+                  Выйти
+                </button>
+              </div>
+            )}
             {SHOW_LEGACY_WIDGETS && (
             <div className="text-right">
               <p className="text-xs text-[var(--text-3)]">
@@ -615,6 +757,35 @@ export default function App() {
             currentId={currentId}
             onSelect={setCurrentId}
           />
+          {currentId !== null && (
+            <button
+              onClick={async () => {
+                if (currentId === null) return;
+                setReportBusy(true);
+                try {
+                  await downloadReport(currentId);
+                } catch (e) {
+                  toast.error(getErrorMessage(e, "Не удалось сформировать отчёт"));
+                } finally {
+                  setReportBusy(false);
+                }
+              }}
+              disabled={reportBusy}
+              className="mt-3 inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-[var(--accent)] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {reportBusy ? (
+                <>
+                  <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white" />
+                  Формируем отчёт…
+                </>
+              ) : (
+                <>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+                  Скачать отчёт
+                </>
+              )}
+            </button>
+          )}
           <div className="flex flex-1 flex-col justify-center gap-2 py-4">
             {loading && <p className="text-sm text-[var(--text-4)]">Загрузка данных…</p>}
             {apiError && <p className="text-sm text-[var(--danger)]">{apiError}</p>}
@@ -622,7 +793,7 @@ export default function App() {
               <p className="text-xs text-[var(--text-4)]">
                 {currentStatement.transactions_count} операций
                 {currentStatement.period_from && currentStatement.period_to
-                  ? ` · ${currentStatement.period_from} — ${currentStatement.period_to}`
+                  ? ` · ${fullDate(currentStatement.period_from)} — ${fullDate(currentStatement.period_to)}`
                   : ""}
               </p>
             )}
@@ -641,7 +812,7 @@ export default function App() {
           label="Доходы"
           value={stats ? money(stats.income) : "—"}
           hint="за период"
-          valueClassName="text-[#A0E720]"
+          valueClassName="text-[var(--positive)]"
         />
         <Stat
           label="Расходы"
@@ -951,12 +1122,12 @@ export default function App() {
             text: "text-[var(--text-3)]",
           };
           return (
-            <div key={o.id} className="rounded-2xl bg-[var(--surface-2)] p-5 dark:border dark:border-[var(--border-soft)]">
+            <div key={o.id} className="rounded-2xl border border-[var(--ai-border)] bg-[var(--ai-bg)] p-5 dark:border-[var(--border-soft)] dark:bg-[var(--surface-2)]">
               <div className="mb-1 flex items-center gap-2">
                 <span className={`h-2 w-2 shrink-0 rounded-full ${accent.dot}`} />
                 <p className={`text-sm font-semibold ${accent.text}`}>{o.title}</p>
               </div>
-              <p className="text-sm leading-relaxed text-[var(--text-2)]">{o.description}</p>
+              <p className="text-sm leading-relaxed text-[var(--text-2)]">{prettifyBackendAmounts(o.description)}</p>
             </div>
           );
         })}
@@ -975,9 +1146,9 @@ export default function App() {
   title="Как сэкономить"
 >
   {recommendations.length > 0 && (
-    <div className="mb-4 flex items-baseline justify-between gap-3 rounded-2xl bg-[var(--accent-soft)] px-4 py-3">
-      <span className="text-sm text-[var(--text-3)]">Потенциал экономии</span>
-      <span className="text-xl font-bold tracking-tight text-[var(--accent)]">
+    <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl bg-[var(--accent-soft)] px-4 py-3">
+      <span className="pt-0.5 text-sm text-[var(--text-3)]">Потенциал экономии</span>
+      <span className="whitespace-nowrap text-right text-xl font-bold tabular-nums tracking-tight text-[var(--accent)]">
         ≈ {money(totalMonthlySaving)} / мес
       </span>
     </div>
@@ -994,21 +1165,31 @@ export default function App() {
     ) : (
       recommendations.map((r) => {
         const style = PRIORITY_STYLE[r.data.priority] ?? PRIORITY_STYLE.low;
+        // Текущая сумма категории восстанавливается из структурных полей:
+        // monthly_saving = currentAmount * reduction_percentage / 100.
+        const currentAmount =
+          r.data.reduction_percentage > 0
+            ? Math.round(r.data.monthly_saving / (r.data.reduction_percentage / 100))
+            : null;
         return (
-          <div key={r.id} className="rounded-2xl bg-[var(--surface-2)] p-4 transition-all duration-200 ease-in-out dark:border dark:border-[var(--border-soft)]">
+            <div key={r.id} className="rounded-2xl border border-[var(--ai-border)] bg-[var(--ai-bg)] p-4 transition-all duration-200 ease-in-out hover:bg-[var(--hover)] dark:border-[var(--border-soft)] dark:bg-[var(--surface-2)]">
             <div className="mb-1 flex items-center justify-between gap-2">
-              <p className="text-sm font-semibold text-[var(--text)]">{r.title}</p>
+              <p className="min-w-0 flex-1 text-sm font-semibold text-[var(--text)]">{r.title}</p>
               <span
-                className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${style.badge}`}
+                className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium tabular-nums ${style.badge}`}
               >
-                {r.data.priority}
+                {PRIORITY_LABELS[r.data.priority] ?? r.data.priority}
               </span>
             </div>
-            <p className="text-sm leading-relaxed text-[var(--text-3)]">{r.description}</p>
+            {currentAmount !== null && (
+              <p className="text-sm tabular-nums leading-relaxed text-[var(--text-3)]">
+                {r.data.category} — {money(currentAmount)}
+              </p>
+            )}
             <p className="mt-1 text-sm leading-relaxed text-[var(--text-2)]">
               {r.data.recommendation}
             </p>
-            <p className={`mt-1.5 text-sm font-semibold ${style.amount}`}>
+            <p className={`mt-1.5 text-sm font-semibold tabular-nums ${style.amount}`}>
               ≈ {money(r.data.monthly_saving)} / месяц · ≈ {money(r.data.annual_saving)} / год
             </p>
           </div>
@@ -1037,6 +1218,8 @@ export default function App() {
           </div>
         </div>
       </div>
+      </>
+      )}
       </div>
     </div>
   );

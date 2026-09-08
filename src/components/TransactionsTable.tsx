@@ -29,6 +29,18 @@ const TYPE_LABEL: Record<string, string> = {
 
 const fmtMoney = (n: number) => n.toLocaleString("ru-RU") + " ₽";
 
+/* ISO "2026-07-25" → банковский "25.07.2026" в строках таблицы. */
+function fullDate(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const dt = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(dt.getTime())) return value;
+  return new Intl.DateTimeFormat("ru", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(dt);
+}
+
 interface Filters {
   category: string;
   type: string;
@@ -217,11 +229,11 @@ export default function TransactionsTable({
           <p className="py-6 text-center text-sm text-[var(--text-4)]">Ничего не найдено</p>
         ) : (
           rows.map((t) => (
-            <div key={t.id} className="flex items-center justify-between gap-3 py-3">
+            <div key={t.id} className="flex items-center justify-between gap-3 py-3 transition-colors hover:bg-[var(--hover)]">
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{t.description ?? "—"}</p>
                 <p className="mt-0.5 text-xs text-[var(--text-4)]">
-                  {t.date ?? "—"} · {t.category ?? "Без категории"}
+                  {fullDate(t.date)} · {t.category ?? "Без категории"}
                   {t.recipient ? ` · → ${t.recipient}` : ""}
                   {t.merchant ? ` · ${t.merchant}` : ""}
                 </p>
@@ -235,7 +247,7 @@ export default function TransactionsTable({
                   {TYPE_LABEL[t.type ?? ""] ?? t.type ?? "—"}
                 </span>
                 <span
-                  className={`w-28 text-right text-sm font-semibold ${
+                  className={`w-28 text-right text-sm font-semibold tabular-nums ${
                     t.type === "credit" ? "text-[var(--accent)]" : "text-[var(--text)]"
                   }`}
                 >

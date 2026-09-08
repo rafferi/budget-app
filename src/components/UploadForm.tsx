@@ -32,12 +32,12 @@ export default function UploadForm({
   return (
     <div>
       <h2 className="mb-1 text-base font-semibold text-[var(--text)]">Загрузка выписки</h2>
-      <p className="mb-4 text-sm text-[var(--text-3)]">CSV-файл банковской выписки</p>
+      <p className="mb-4 text-sm text-[var(--text-3)]">CSV или PDF файл банковской выписки</p>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <input
           ref={inputRef}
           type="file"
-          accept=".csv"
+          accept=".csv,.txt,.pdf"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
           className="block w-full cursor-pointer text-sm text-[var(--text-4)] file:mr-3 file:cursor-pointer file:rounded-full file:border file:border-[var(--border-strong)] file:bg-[var(--surface-3)] file:px-4 file:py-2 file:text-sm file:font-medium file:text-[var(--text)] file:transition hover:file:bg-[var(--surface-3)]"
         />

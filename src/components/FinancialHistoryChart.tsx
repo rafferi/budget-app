@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -36,7 +37,7 @@ function shortAxisMoney(value: number): string {
 const axisTick = { fontSize: 12, fill: "var(--chart-axis)" };
 const tooltipStyle = {
   background: "var(--overlay)",
-  border: "1px solid var(--border-strong)",
+  border: "1px solid var(--border)",
   borderRadius: 12,
   color: "var(--text)",
   fontSize: 13,
@@ -115,6 +116,7 @@ export default function FinancialHistoryChart({
                 margin={{ top: 5, right: 5, left: 0, bottom: 0 }}
                 barGap={4}
               >
+                <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
                 <XAxis
                   dataKey="month"
                   tickLine={false}
@@ -142,14 +144,14 @@ export default function FinancialHistoryChart({
                 <Bar
                   dataKey="income"
                   name="Доходы"
-                  fill="var(--chart-line)"
+                  fill="var(--chart-income)"
                   radius={[6, 6, 0, 0]}
                   maxBarSize={26}
                 />
                 <Bar
                   dataKey="expenses"
                   name="Расходы"
-                  fill="var(--danger)"
+                  fill="var(--chart-expenses)"
                   fillOpacity={0.7}
                   radius={[6, 6, 0, 0]}
                   maxBarSize={26}
@@ -161,14 +163,14 @@ export default function FinancialHistoryChart({
             <span className="flex items-center gap-2 text-[var(--text-3)]">
               <span
                 className="h-2.5 w-2.5 rounded-full"
-                style={{ background: "var(--chart-line)" }}
+                style={{ background: "var(--chart-income)" }}
               />
               Доходы
             </span>
             <span className="flex items-center gap-2 text-[var(--text-3)]">
               <span
                 className="h-2.5 w-2.5 rounded-full opacity-70"
-                style={{ background: "var(--danger)" }}
+                style={{ background: "var(--chart-expenses)" }}
               />
               Расходы
             </span>

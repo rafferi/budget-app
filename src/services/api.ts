@@ -157,9 +157,20 @@ export function getErrorMessage(e: unknown, fallback: string): string {
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getToken();
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+  if (token !== null) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
   let res: Response;
   try {
-    res = await fetch(`${API_BASE}${path}`, init);
+    res = await fetch(`${API_BASE}${path}`, {
+      ...init,
+      headers: { ...headers, ...(init?.headers as Record<string, string> | undefined) },
+    });
   } catch {
     throw new ApiError(
       0,
@@ -175,10 +186,118 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!res.ok) {
+    // Протухший/битый токен посреди сессии: чистим локально и отдаём
+    // управление в App через зарегистрированный колбэк (экран входа).
+    // Сами login/register из-под правила исключены — их 401/422
+    // обрабатывает форма входа, а не глобальный разлогин.
+    if (res.status === 401 && !isAuthPath(path)) {
+      clearToken();
+      unauthorizedHandler?.();
+    }
     throw new ApiError(res.status, body);
   }
 
   return body as T;
+}
+
+/* ---------- Авторизация (Sanctum, Bearer) ---------- */
+
+const TOKEN_KEY = "finbalance_token";
+
+const AUTH_PATHS = ["/auth/login", "/auth/register"];
+
+function isAuthPath(path: string): boolean {
+  return AUTH_PATHS.some((p) => path === p || path.startsWith(`${p}?`));
+}
+
+export function getToken(): string | null {
+  try {
+    return localStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function setToken(token: string): void {
+  try {
+    localStorage.setItem(TOKEN_KEY, token);
+  } catch {
+    /* приватный режим и т.п. — сессия просто не переживёт перезагрузку */
+  }
+}
+
+export function clearToken(): void {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+type UnauthorizedHandler = () => void;
+
+let unauthorizedHandler: UnauthorizedHandler | null = null;
+
+/* App регистрирует переход в anonymous при 401 посреди сессии. */
+export function setUnauthorizedHandler(fn: UnauthorizedHandler | null): void {
+  unauthorizedHandler = fn;
+}
+
+export interface AuthUser {
+  id: number;
+  email: string;
+  name: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  user: AuthUser;
+}
+
+export async function register(
+  email: string,
+  password: string,
+  name?: string,
+): Promise<AuthResponse> {
+  const res = await request<AuthResponse>("/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      email,
+      password,
+      ...(name !== undefined && name !== "" ? { name } : {}),
+    }),
+  });
+  setToken(res.token);
+
+  return res;
+}
+
+export async function login(email: string, password: string): Promise<AuthResponse> {
+  const res = await request<AuthResponse>("/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, password }),
+  });
+  setToken(res.token);
+
+  return res;
+}
+
+export async function logout(): Promise<void> {
+  try {
+    await request("/auth/logout", { method: "POST" });
+    clearToken();
+  } catch (e) {
+    // 401 здесь тоже означает «сессия мертва» — токен уже сброшен
+    // глобальным обработчиком выше; сеть же — не повод разлогинивать.
+    if (e instanceof ApiError && e.status === 401) clearToken();
+    throw e;
+  }
+}
+
+export function getMe(): Promise<{ user: AuthUser }> {
+  return request<{ user: AuthUser }>("/auth/me");
 }
 
 function toQuery(params: Record<string, string | number | undefined>): string {
@@ -367,6 +486,49 @@ export interface CategoriesResponse {
 
 export function getCategories(): Promise<CategoriesResponse> {
   return request<CategoriesResponse>("/categories");
+}
+
+export async function downloadReport(statementId: number): Promise<void> {
+  const token = getToken();
+  const headers: Record<string, string> = {};
+  if (token !== null) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}/statements/${statementId}/report/pdf`, {
+      headers,
+    });
+  } catch {
+    throw new ApiError(0, {
+      message: "Не удалось соединиться с сервером. Проверьте, что backend запущен.",
+    });
+  }
+
+  if (!res.ok) {
+    if (res.status === 401 && !isAuthPath("/statements")) {
+      clearToken();
+      unauthorizedHandler?.();
+    }
+    let body: unknown = null;
+    try {
+      body = await res.json();
+    } catch {
+      /* ignore */
+    }
+    throw new ApiError(res.status, body);
+  }
+
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `finbalance-report-${statementId}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 /* Глобальный тренд по всем выпискам скоупа (не привязан к одной выписке).

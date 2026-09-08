@@ -1,5 +1,17 @@
 import type { Statement } from "../services/api";
 
+/* ISO "2026-07-25" → банковский "25.07.2026" в подписях опций. */
+function fullDate(value: string | null | undefined): string {
+  if (value === null || value === undefined || value === "") return "—";
+  const dt = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(dt.getTime())) return value;
+  return new Intl.DateTimeFormat("ru", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(dt);
+}
+
 export default function StatementSelector({
   statements,
   currentId,
@@ -24,7 +36,7 @@ export default function StatementSelector({
           {statements.map((s) => (
             <option key={s.id} value={s.id} className="bg-[var(--field)] text-[var(--text)]">
               {s.file_name} · {s.transactions_count} оп.
-              {s.period_from && s.period_to ? ` · ${s.period_from} — ${s.period_to}` : ""}
+              {s.period_from && s.period_to ? ` · ${fullDate(s.period_from)} — ${fullDate(s.period_to)}` : ""}
             </option>
           ))}
         </select>
