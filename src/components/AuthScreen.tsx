@@ -56,7 +56,7 @@ export default function AuthScreen({
     <div className="flex min-h-[70vh] items-center justify-center px-4 py-10">
       <div className="w-full max-w-md rounded-3xl border border-[var(--border)] bg-[var(--surface)] p-7 shadow-[var(--shadow-card)] backdrop-blur-2xl md:p-8">
         <h2 className="text-xl font-bold tracking-tight text-[var(--text)]">
-          FinBalance
+          Финбаланс
         </h2>
         <p className="mb-6 mt-1 text-sm text-[var(--text-3)]">
           Войдите, чтобы увидеть свои выписки
@@ -109,7 +109,7 @@ export default function AuthScreen({
               onKeyDown={(e) => {
                 if (e.key === "Enter") submit();
               }}
-              placeholder="you@example.com"
+              placeholder="ivan@pochta.ru"
               className={inputClass}
             />
           </label>

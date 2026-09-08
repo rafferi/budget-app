@@ -140,7 +140,7 @@ export default function MandatoryExpensesBlock({
       </p>
 
       {data === null && !failed && (
-        <p className="py-2 text-sm text-[var(--text-4)]">Загрузка...</p>
+        <p className="py-2 text-sm text-[var(--text-4)]">Загрузка…</p>
       )}
 
       {failed && (

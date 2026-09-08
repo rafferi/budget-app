@@ -212,7 +212,7 @@ function Logo() {
       />
       <div>
         <p className="text-xl font-bold leading-tight tracking-tight text-[var(--text)]">
-          FinBalance
+          Финбаланс
         </p>
         <p className="text-xs leading-tight text-[var(--text-4)]">Анализ банковских выписок · прототип для экосистемы Сбера</p>
       </div>
